@@ -26,7 +26,7 @@ def load_api_key() -> str:
 def save_api_key(key: str) -> None:
     """Persist the API key to local storage."""
     streamlit_js_eval(
-        js_expressions=f"localStorage.setItem('openai_api_key', '{key}')",
+        js_expressions=f"localStorage.setItem('openai_api_key', {json.dumps(key)})",
         key="set_api_key",
     )
 
