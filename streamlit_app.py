@@ -80,7 +80,20 @@ api_key = st.session_state.openai_api_key
 if is_valid_openai_api_key(api_key):
     embedder = OpenAIEmbeddings(
         model="text-embedding-3-small", openai_api_key=api_key
-    )
+model_name = "text-embedding-3-small"
+if api_key:
+    # Cache the embedder in session_state to avoid recreating it unnecessarily
+    if (
+        "embedder" not in st.session_state
+        or st.session_state.get("embedder_api_key") != api_key
+        or st.session_state.get("embedder_model") != model_name
+    ):
+        st.session_state.embedder = OpenAIEmbeddings(
+            model=model_name, openai_api_key=api_key
+        )
+        st.session_state.embedder_api_key = api_key
+        st.session_state.embedder_model = model_name
+    embedder = st.session_state.embedder
 
 @st.cache_data(show_spinner="Generating embedding...")
 def get_hello_world_embedding(api_key: str):
