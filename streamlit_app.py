@@ -69,7 +69,16 @@ if api_key:
     embedder = OpenAIEmbeddings(
         model="text-embedding-3-small", openai_api_key=api_key
     )
-    vector = embedder.embed_query("Hello world")
+
+@st.cache_data(show_spinner="Generating embedding...")
+def get_hello_world_embedding(api_key: str):
+    embedder = OpenAIEmbeddings(
+        model="text-embedding-3-small", openai_api_key=api_key
+    )
+    return embedder.embed_query("Hello world")
+
+if api_key:
+    vector = get_hello_world_embedding(api_key)
     st.write(vector)
 else:
     st.info("Set your OpenAI API key in settings to generate embeddings.")
