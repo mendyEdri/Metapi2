@@ -65,14 +65,15 @@ if st.session_state.get("show_settings"):
 
 
 api_key = st.session_state.openai_api_key
-                input_key = st.session_state.api_key_input
-                if is_valid_openai_api_key(input_key):
-                    st.session_state.openai_api_key = input_key
-                    save_api_key(input_key)
-                    close_settings()
-                else:
-                    st.error("Invalid API key format. Please enter a valid OpenAI API key (starts with 'sk-' and is the correct length).")
-        with col_close:
+input_key = st.session_state.api_key_input
+if is_valid_openai_api_key(input_key):
+    st.session_state.openai_api_key = input_key
+    save_api_key(input_key)
+    close_settings()
+else:
+    st.error("Invalid API key format. Please enter a valid OpenAI API key (starts with 'sk-' and is the correct length).")
+    st.error("Invalid API key format. Please enter a valid OpenAI API key (starts with 'sk-' and is the correct length).")
+    with col_close:
             st.button("Close", on_click=close_settings)
 
 
