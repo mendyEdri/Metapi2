@@ -1,3 +1,5 @@
 streamlit
 langchain-openai
 streamlit_js_eval
+scikit-learn
+matplotlib
