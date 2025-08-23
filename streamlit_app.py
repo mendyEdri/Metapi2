@@ -95,11 +95,17 @@ if api_key:
         st.session_state.embedder_model = model_name
     embedder = st.session_state.embedder
 
-    @st.cache_data(show_spinner="Generating embedding...")
-    def get_hello_world_embedding(api_key: str):
-        return embedder.embed_query("Hello world")
+    prompt = st.text_area("System Prompt")
 
-    vector = get_hello_world_embedding(api_key)
-    st.write(vector)
+    @st.cache_data(show_spinner="Generating embedding...")
+    def get_embedding(text: str, api_key: str):
+        return embedder.embed_query(text)
+
+    if st.button("Analyze"):
+        if prompt.strip():
+            vector = get_embedding(prompt, api_key)
+            st.write(vector)
+        else:
+            st.error("Please enter text to analyze.")
 else:
     st.info("Set your OpenAI API key in settings to generate embeddings.")
