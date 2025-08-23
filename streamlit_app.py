@@ -7,10 +7,10 @@ generated and displayed.
 """
 
 import json
-import re
 import numpy as np
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from streamlit_js_eval import streamlit_js_eval
 from clustering import cluster_embeddings, visualize_clusters
 
@@ -118,25 +118,24 @@ if api_key:
         )
 
     def cluster_prompt(text: str):
-        sentences = [
-            s.strip()
-            for s in re.split(r"(?<=[.!?])\s+", text.strip())
-            if s.strip()
-        ]
-        if len(sentences) < 2:
-            raise ValueError("Need at least two sentences for clustering.")
-        vectors = [embedder.embed_query(s) for s in sentences]
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=500, chunk_overlap=50
+        )
+        chunks = [doc.page_content for doc in splitter.create_documents([text])]
+        if len(chunks) < 2:
+            raise ValueError("Need at least two chunks for clustering.")
+        vectors = [embedder.embed_query(chunk) for chunk in chunks]
         embeddings = np.array(vectors)
         k = int(n_clusters or 3)
         if algorithm != "dbscan":
             k = min(k, len(embeddings))
         labels = cluster_embeddings(embeddings, algorithm=algorithm, n_clusters=k)
-        return sentences, embeddings, labels
+        return chunks, embeddings, labels
 
     if st.button("Analyze prompt"):
         if prompt.strip():
             try:
-                sentences, embeddings, labels = cluster_prompt(prompt)
+                chunks, embeddings, labels = cluster_prompt(prompt)
             except ValueError as err:
                 st.error(str(err))
             else:
@@ -144,18 +143,18 @@ if api_key:
                     fig = visualize_clusters(
                         embeddings,
                         labels,
-                        title="Sentence clusters",
+                        title="Prompt chunk clusters",
                     )
                 except ValueError as err:
                     st.warning(str(err))
                 else:
                     st.pyplot(fig)
-                    st.subheader("Clustered sentences")
-                    sentences_arr = np.array(sentences)
+                    st.subheader("Clustered chunks")
+                    chunks_arr = np.array(chunks)
                     for label in sorted(set(labels)):
                         st.markdown(f"**Cluster {label}**")
-                        for sent in sentences_arr[labels == label]:
-                            st.write(sent)
+                        for chunk in chunks_arr[labels == label]:
+                            st.write(chunk)
         else:
             st.error("Please enter a system prompt to analyze.")
 else:
