@@ -22,6 +22,16 @@ CLUSTERERS = {
     "dbscan": lambda _: DBSCAN(),
 }
 
+# Public API re-exported when ``from clustering import *`` is used. Including
+# ``compute_chunk_weights`` here fixes ``ImportError`` issues when that helper
+# function was missing from the module's exported namespace.
+__all__ = [
+    "cluster_embeddings",
+    "visualize_clusters",
+    "compute_chunk_weights",
+    "build_chunk_graph",
+]
+
 
 def cluster_embeddings(
     embeddings: np.ndarray,
