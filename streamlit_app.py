@@ -140,16 +140,20 @@ if api_key:
             except ValueError as err:
                 st.error(str(err))
             else:
-                fig = visualize_clusters(
-                    embeddings, labels, title="Sentence clusters"
-                )
-                st.pyplot(fig)
-                st.subheader("Clustered sentences")
-                sentences_arr = np.array(sentences)
-                for label in sorted(set(labels)):
-                    st.markdown(f"**Cluster {label}**")
-                    for sent in sentences_arr[labels == label]:
-                        st.write(sent)
+                try:
+                    fig = visualize_clusters(
+                        embeddings, labels, title="Sentence clusters"
+                    )
+                except ValueError as err:
+                    st.warning(str(err))
+                else:
+                    st.pyplot(fig)
+                    st.subheader("Clustered sentences")
+                    sentences_arr = np.array(sentences)
+                    for label in sorted(set(labels)):
+                        st.markdown(f"**Cluster {label}**")
+                        for sent in sentences_arr[labels == label]:
+                            st.write(sent)
         else:
             st.error("Please enter a system prompt to analyze.")
 else:
