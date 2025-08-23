@@ -123,18 +123,22 @@ if api_key:
             for s in re.split(r"(?<=[.!?])\s+", text.strip())
             if s.strip()
         ]
+        if len(sentences) < 2:
+            raise ValueError("Need at least two sentences for clustering.")
         vectors = [embedder.embed_query(s) for s in sentences]
         embeddings = np.array(vectors)
-        labels = cluster_embeddings(
-            embeddings, algorithm=algorithm, n_clusters=int(n_clusters or 3)
-        )
+        k = int(n_clusters or 3)
+        if algorithm != "dbscan":
+            k = min(k, len(embeddings))
+        labels = cluster_embeddings(embeddings, algorithm=algorithm, n_clusters=k)
         return sentences, embeddings, labels
 
     if st.button("Analyze prompt"):
         if prompt.strip():
-            sentences, embeddings, labels = cluster_prompt(prompt)
-            if len(sentences) < 2:
-                st.error("Need at least two sentences for clustering.")
+            try:
+                sentences, embeddings, labels = cluster_prompt(prompt)
+            except ValueError as err:
+                st.error(str(err))
             else:
                 fig = visualize_clusters(
                     embeddings, labels, title="Sentence clusters"
