@@ -13,13 +13,15 @@ def test_visualize_clusters_uses_pca():
     assert "PCA" in fig.axes[0].get_title()
 
 
-def test_visualize_clusters_labels_points_with_cluster_numbers():
+def test_visualize_clusters_labels_points_with_chunk_indices():
     embeddings = np.array([[float(i), float(i)] for i in range(3)])
-    labels = [0, 1, 2]
+    # deliberately give repeated cluster labels to ensure chunk indices are used
+    labels = [0, 0, 1]
     fig = visualize_clusters(embeddings, labels)
     texts = [t.get_text() for t in fig.axes[0].texts]
     assert len(texts) == len(labels)
-    assert set(texts) == {str(l) for l in labels}
+    # Expect the annotations to be the chunk indices 0,1,2 regardless of labels
+    assert set(texts) == {"0", "1", "2"}
 
 
 def test_build_chunk_graph_creates_edges_for_similar_chunks():

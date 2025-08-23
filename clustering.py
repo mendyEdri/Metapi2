@@ -86,6 +86,11 @@ def visualize_clusters(
     -------
     matplotlib.figure.Figure
         The generated scatter plot.
+
+    Notes
+    -----
+    Points are colored according to their cluster label and annotated with
+    their chunk index to ease interpretation.
     """
     X = np.asarray(embeddings)
     n_samples = int(X.shape[0])
@@ -108,8 +113,9 @@ def visualize_clusters(
     fig, ax = plt.subplots()
     labels_arr = np.asarray(list(labels))
     ax.scatter(Y[:, 0], Y[:, 1], c=labels_arr, cmap="tab10", s=40)
-    for (x, y), label in zip(Y, labels_arr):
-        ax.text(x, y, str(label), ha="center", va="center", fontsize=9)
+    for idx, (x, y) in enumerate(Y):
+        # annotate each point with its chunk index above the marker
+        ax.text(x, y, str(idx), ha="center", va="bottom", fontsize=9)
     ax.set_title(f"{title} • {method}")
     ax.set_xlabel("dim 1")
     ax.set_ylabel("dim 2")
