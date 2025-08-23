@@ -10,6 +10,7 @@ from typing import Iterable, Optional
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
+from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 
 # Mapping of algorithm names to their constructors. Functions accept the desired
@@ -55,36 +56,66 @@ def cluster_embeddings(
 def visualize_clusters(
     embeddings: np.ndarray,
     labels: Iterable[int],
-    title: Optional[str] = None,
+    title: str = "Sentence clusters",
+    perplexity: float = 30.0,
+    random_state: int = 42,
 ) -> plt.Figure:
-    """Create a t-SNE scatter plot of clustered embeddings.
+    """Visualize clustered embeddings using t-SNE or PCA.
 
-    The returned matplotlib figure can be rendered in different contexts,
-    such as Streamlit via ``st.pyplot``. The t-SNE ``perplexity`` parameter is
-    automatically clamped to keep it within ``(0, n_samples)`` so small
-    datasets do not trigger a ``ValueError`` during visualization.
+    Parameters
+    ----------
+    embeddings:
+        Array of shape ``(n_samples, n_features)`` with the embedding vectors.
+    labels:
+        Iterable of cluster labels for each embedding.
+    title:
+        Plot title. Defaults to ``"Sentence clusters"``.
+    perplexity:
+        Desired t-SNE perplexity. Values outside ``(0, n_samples)`` are clamped.
+    random_state:
+        Random seed for reproducible dimensionality reduction.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The generated scatter plot.
     """
-    n_samples = embeddings.shape[0]
-    if n_samples < 2:
-        raise ValueError("At least two samples are required for t-SNE visualization.")
+    X = np.asarray(embeddings)
+    n_samples = int(X.shape[0])
 
-    # ``perplexity`` controls the balance between local and global aspects of the data
-    # when t-SNE builds its pairwise similarities.  The scikit-learn implementation
-    # requires ``0 < perplexity < n_samples``; with a small dataset the default value
-    # of ``30`` would violate this constraint and raise ``ValueError``.  Clamping the
-    # value here keeps it within the valid range so the visualization always works.
-    perplexity = max(1, min(30, n_samples - 1))
-    reduced = TSNE(
-        n_components=2,
-        random_state=42,
-        perplexity=perplexity,
-    ).fit_transform(embeddings)
+    if n_samples < 2:
+        raise ValueError("At least two samples are required for visualization.")
+
+    if np.isnan(X).any() or np.isinf(X).any():
+        valid_mask = ~np.isnan(X).any(axis=1) & ~np.isinf(X).any(axis=1)
+        X = X[valid_mask]
+        labels = [labels[i] for i, ok in enumerate(valid_mask) if ok]
+        n_samples = int(X.shape[0])
+        if n_samples < 2:
+            raise ValueError("Not enough valid samples after removing NaN/Inf rows.")
+
+    if n_samples <= 3:
+        reducer = PCA(n_components=2, random_state=random_state)
+        Y = reducer.fit_transform(X)
+        method = "PCA (n≤3)"
+    else:
+        effective_perplexity = min(float(perplexity), max(1.0, n_samples - 1.0))
+        reducer = TSNE(
+            n_components=2,
+            perplexity=effective_perplexity,
+            init="pca",
+            random_state=random_state,
+            learning_rate="auto",
+        )
+        Y = reducer.fit_transform(X)
+        method = f"t-SNE (perp={effective_perplexity:.1f}, n={n_samples})"
+
     fig, ax = plt.subplots()
-    ax.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap="tab10")
-    ax.set_xlabel("TSNE-1")
-    ax.set_ylabel("TSNE-2")
-    ax.set_title(title or "Embedding clusters")
-    fig.tight_layout()
+    ax.scatter(Y[:, 0], Y[:, 1], s=40)
+    ax.set_title(f"{title} • {method}")
+    ax.set_xlabel("dim 1")
+    ax.set_ylabel("dim 2")
+    ax.grid(True, alpha=0.3)
     return fig
 
 
