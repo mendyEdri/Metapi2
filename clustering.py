@@ -22,15 +22,6 @@ CLUSTERERS = {
     "dbscan": lambda _: DBSCAN(),
 }
 
-# Public API re-exported when ``from clustering import *`` is used. Including
-# ``compute_chunk_weights`` here fixes ``ImportError`` issues when that helper
-# function was missing from the module's exported namespace.
-__all__ = [
-    "cluster_embeddings",
-    "visualize_clusters",
-    "compute_chunk_weights",
-    "build_chunk_graph",
-]
 
 
 def cluster_embeddings(
@@ -201,3 +192,13 @@ if __name__ == "__main__":
     labels = cluster_embeddings(data, algorithm="kmeans", n_clusters=3)
     fig = visualize_clusters(data, labels, title="KMeans clustering of Iris data")
     fig.show()
+
+# Public API for ``from clustering import *``. Keeping the ``__all__``
+# declaration at the end of the module ensures that any helper defined above
+# (such as ``compute_chunk_weights``) is always exported.
+__all__ = [
+    "cluster_embeddings",
+    "visualize_clusters",
+    "compute_chunk_weights",
+    "build_chunk_graph",
+]
