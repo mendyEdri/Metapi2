@@ -9,7 +9,12 @@ from typing import Iterable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-import networkx as nx
+
+try:
+    import networkx as nx
+except Exception:  # pragma: no cover - optional dependency
+    nx = None
+
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
@@ -165,6 +170,11 @@ def build_chunk_graph(
     networkx.Graph
         Undirected graph with one node per chunk and edges for similar chunks.
     """
+    if nx is None:  # pragma: no cover - handled at runtime
+        raise ImportError(
+            "networkx is required for build_chunk_graph. Install it with 'pip install networkx'"
+        )
+
     texts = list(chunks)
     X = np.asarray(embeddings)
     if X.shape[0] != len(texts):
