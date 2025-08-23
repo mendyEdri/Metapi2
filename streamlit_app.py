@@ -52,7 +52,11 @@ def close_settings() -> None:
 st.button("Settings", on_click=open_settings)
 
 if st.session_state.get("show_settings"):
-    with st.modal("Settings"):
+    has_modal = hasattr(st, "modal")
+    container = st.modal("Settings") if has_modal else st.sidebar
+    with container:
+        if not has_modal:
+            st.header("Settings")
         api_key_input = st.text_input(
             "OpenAI API Key",
             value=st.session_state.openai_api_key,
