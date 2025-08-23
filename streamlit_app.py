@@ -8,11 +8,17 @@ generated and displayed.
 
 import json
 import numpy as np
+import matplotlib.pyplot as plt
+import networkx as nx
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from streamlit_js_eval import streamlit_js_eval
-from clustering import cluster_embeddings, visualize_clusters
+from clustering import (
+    cluster_embeddings,
+    visualize_clusters,
+    build_chunk_graph,
+)
 
 
 st.title("Hello, World!")
@@ -139,6 +145,17 @@ if api_key:
             except ValueError as err:
                 st.error(str(err))
             else:
+                st.subheader("Chunks")
+                for idx, chunk in enumerate(chunks):
+                    st.markdown(f"**Chunk {idx}**")
+                    st.write(chunk)
+
+                graph = build_chunk_graph(chunks, embeddings)
+                graph_fig, graph_ax = plt.subplots()
+                nx.draw_networkx(graph, ax=graph_ax, with_labels=True, node_size=500, font_size=8)
+                graph_ax.set_title("Chunk similarity graph")
+                st.pyplot(graph_fig)
+
                 try:
                     fig = visualize_clusters(
                         embeddings,

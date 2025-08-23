@@ -9,8 +9,10 @@ from typing import Iterable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+import networkx as nx
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
 from sklearn.decomposition import PCA
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Mapping of algorithm names to their constructors. Functions accept the desired
 # number of clusters and return an instantiated estimator.
@@ -101,6 +103,45 @@ def visualize_clusters(
     ax.set_ylabel("dim 2")
     ax.grid(True, alpha=0.3)
     return fig
+
+
+def build_chunk_graph(
+    chunks: Iterable[str],
+    embeddings: np.ndarray,
+    threshold: float = 0.8,
+) -> nx.Graph:
+    """Create a graph connecting similar chunks based on cosine similarity.
+
+    Parameters
+    ----------
+    chunks:
+        Iterable of text chunks.
+    embeddings:
+        Array of shape ``(n_samples, n_features)`` containing chunk embeddings.
+    threshold:
+        Minimum cosine similarity required to create an edge between two chunks.
+
+    Returns
+    -------
+    networkx.Graph
+        Undirected graph with one node per chunk and edges for similar chunks.
+    """
+    texts = list(chunks)
+    X = np.asarray(embeddings)
+    if X.shape[0] != len(texts):
+        raise ValueError("Number of chunks and embeddings must match")
+
+    graph = nx.Graph()
+    for idx, text in enumerate(texts):
+        graph.add_node(idx, text=text)
+
+    sim = cosine_similarity(X)
+    n = sim.shape[0]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if sim[i, j] >= threshold:
+                graph.add_edge(i, j, weight=float(sim[i, j]))
+    return graph
 
 
 if __name__ == "__main__":
