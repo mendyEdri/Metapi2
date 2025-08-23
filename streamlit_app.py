@@ -7,6 +7,7 @@ generated and displayed.
 """
 
 import json
+import xml.etree.ElementTree as ET
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -125,10 +126,19 @@ if api_key:
         )
 
     def cluster_prompt(text: str):
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500, chunk_overlap=50
-        )
-        chunks = [doc.page_content for doc in splitter.create_documents([text])]
+        try:
+            root = ET.fromstring(text)
+        except ET.ParseError:
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=500, chunk_overlap=50
+            )
+            chunks = [doc.page_content for doc in splitter.create_documents([text])]
+        else:
+            chunks = [
+                elem.text.strip()
+                for elem in root.iter()
+                if elem.text and elem.text.strip()
+            ]
         if len(chunks) < 2:
             raise ValueError("Need at least two chunks for clustering.")
         vectors = [embedder.embed_query(chunk) for chunk in chunks]
