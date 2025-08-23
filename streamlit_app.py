@@ -147,16 +147,19 @@ if api_key:
             except ValueError as err:
                 st.error(str(err))
             else:
-                st.subheader("Chunks")
+                st.subheader("Chunk details")
                 for idx, chunk in enumerate(chunks):
-                    st.markdown(f"**Chunk {idx}**")
-                    st.write(chunk)
+                    with st.expander(f"Chunk {idx}", expanded=False):
+                        st.write(chunk)
+                        st.markdown(f"Weight: {weights[idx]:.3f}")
+                        st.markdown(f"Cluster: {labels[idx]}")
 
                 st.subheader("Chunk weights (higher means more influence)")
                 sorted_idx = list(np.argsort(weights)[::-1])
                 for rank, idx in enumerate(sorted_idx):
-                    st.markdown(f"**Rank {rank + 1} – Chunk {idx} (weight={weights[idx]:.3f})**")
-                    st.write(chunks[idx])
+                    st.markdown(
+                        f"**Rank {rank + 1} – Chunk {idx} (weight={weights[idx]:.3f})**"
+                    )
 
                 st.subheader("Weighted prompt")
                 weighted_prompt = "\n\n".join(chunks[i] for i in sorted_idx)
@@ -179,11 +182,10 @@ if api_key:
                 else:
                     st.pyplot(fig)
                     st.subheader("Clustered chunks")
-                    chunks_arr = np.array(chunks)
                     for label in sorted(set(labels)):
                         st.markdown(f"**Cluster {label}**")
-                        for chunk in chunks_arr[labels == label]:
-                            st.write(chunk)
+                        members = np.where(labels == label)[0]
+                        st.write(", ".join(f"Chunk {i}" for i in members))
         else:
             st.error("Please enter a system prompt to analyze.")
 else:
