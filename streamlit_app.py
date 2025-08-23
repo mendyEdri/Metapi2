@@ -7,9 +7,11 @@ generated and displayed.
 """
 
 import json
+import numpy as np
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
 from streamlit_js_eval import streamlit_js_eval
+from clustering import cluster_embeddings, visualize_clusters
 
 
 st.title("Hello, World!")
@@ -103,17 +105,46 @@ if api_key:
         st.session_state.embedder_model = model_name
     embedder = st.session_state.embedder
 
+    if "prompts" not in st.session_state:
+        st.session_state.prompts = []
+    if "embeddings" not in st.session_state:
+        st.session_state.embeddings = []
+
     prompt = st.text_area("System Prompt")
 
     @st.cache_data(show_spinner="Generating embedding...")
     def get_embedding(text: str, api_key: str):
         return embedder.embed_query(text)
 
-    if st.button("Analyze"):
+    if st.button("Add to dataset"):
         if prompt.strip():
             vector = get_embedding(prompt, api_key)
-            st.write(vector)
+            st.session_state.prompts.append(prompt)
+            st.session_state.embeddings.append(vector)
+            st.success("Prompt added.")
         else:
             st.error("Please enter text to analyze.")
+
+    if st.session_state.prompts:
+        st.subheader("Current prompts")
+        for i, p in enumerate(st.session_state.prompts, 1):
+            st.write(f"{i}. {p}")
+
+    if len(st.session_state.embeddings) >= 2:
+        algorithm = st.selectbox(
+            "Clustering algorithm", ["kmeans", "agglomerative", "dbscan"], index=0
+        )
+        n_clusters = st.number_input(
+            "Number of clusters", min_value=2, max_value=10, value=3
+        )
+        if st.button("Visualize clusters"):
+            embeddings = np.array(st.session_state.embeddings)
+            labels = cluster_embeddings(
+                embeddings, algorithm=algorithm, n_clusters=int(n_clusters)
+            )
+            fig = visualize_clusters(embeddings, labels, title="Prompt clusters")
+            st.pyplot(fig)
+    else:
+        st.info("Add at least two prompts to visualize clusters.")
 else:
     st.info("Set your OpenAI API key in settings to generate embeddings.")
