@@ -37,16 +37,20 @@ def chunk_prompt(text: str) -> List[str]:
     """
 
     if "<" in text and ">" in text:
-        try:
-            root = ET.fromstring(text)
-        except ET.ParseError:
-            pass
-        else:
-            return [
-                elem.text.strip()
-                for elem in root.iter()
-                if elem.text and elem.text.strip()
-            ]
+        candidates = [(text, False), (f"<root>{text}</root>", True)]
+        for candidate, skip_root in candidates:
+            try:
+                root = ET.fromstring(candidate)
+            except ET.ParseError:
+                continue
+            else:
+                return [
+                    elem.text.strip()
+                    for elem in root.iter()
+                    if (not skip_root or elem is not root)
+                    and elem.text
+                    and elem.text.strip()
+                ]
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     return [doc.page_content for doc in splitter.create_documents([text])]
