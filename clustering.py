@@ -105,6 +105,44 @@ def visualize_clusters(
     return fig
 
 
+def compute_chunk_weights(
+    embeddings: np.ndarray,
+    reference: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """Compute softmax-normalized weights for each embedding.
+
+    The weight for a chunk is derived from its cosine similarity to a reference
+    vector. When ``reference`` is ``None`` the centroid of all embeddings is
+    used. The similarities are converted to a probability distribution via a
+    softmax so that the weights sum to 1.
+
+    Parameters
+    ----------
+    embeddings:
+        Array of shape ``(n_samples, n_features)`` containing the embeddings.
+    reference:
+        Optional reference vector. If ``None`` the centroid of ``embeddings``
+        is used.
+
+    Returns
+    -------
+    np.ndarray
+        Array of weights with the same length as ``embeddings``.
+    """
+    X = np.asarray(embeddings)
+    if X.ndim != 2:
+        raise ValueError("embeddings must be a 2D array")
+
+    ref = np.asarray(reference) if reference is not None else X.mean(axis=0)
+    ref = ref.reshape(1, -1)
+    sims = cosine_similarity(X, ref).ravel()
+
+    # Numerical stability: subtract max before exponentiating
+    exp_scores = np.exp(sims - np.max(sims))
+    weights = exp_scores / exp_scores.sum()
+    return weights
+
+
 def build_chunk_graph(
     chunks: Iterable[str],
     embeddings: np.ndarray,
