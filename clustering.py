@@ -60,8 +60,9 @@ def visualize_clusters(
     """Create a t-SNE scatter plot of clustered embeddings.
 
     The returned matplotlib figure can be rendered in different contexts,
-    such as Streamlit via ``st.pyplot``. Perplexity is adjusted to remain
-    valid for the number of provided samples.
+    such as Streamlit via ``st.pyplot``. The t-SNE ``perplexity`` parameter is
+    automatically clamped to keep it within ``(0, n_samples)`` so small
+    datasets do not trigger a ``ValueError`` during visualization.
     """
     n_samples = embeddings.shape[0]
     if n_samples < 2:
