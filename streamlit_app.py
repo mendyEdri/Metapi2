@@ -38,7 +38,15 @@ def save_api_key(key: str) -> None:
 
 
 if "openai_api_key" not in st.session_state:
-    st.session_state.openai_api_key = load_api_key()
+    # Initialize the key in session state; the actual value will be
+    # loaded from the browser's local storage on each rerun.
+    st.session_state.openai_api_key = ""
+
+# `streamlit_js_eval` resolves asynchronously, so we fetch the value on
+# every run and update session state when a stored key becomes available.
+stored_api_key = load_api_key()
+if stored_api_key and stored_api_key != st.session_state.openai_api_key:
+    st.session_state.openai_api_key = stored_api_key
 
 
 def open_settings() -> None:
