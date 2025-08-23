@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib.figure import Figure
 
-from clustering import build_chunk_graph, visualize_clusters
+from clustering import build_chunk_graph, visualize_clusters, compute_chunk_weights
 
 
 def test_visualize_clusters_uses_pca():
@@ -21,3 +21,11 @@ def test_build_chunk_graph_creates_edges_for_similar_chunks():
     # First two chunks are similar; third is different
     assert graph.has_edge(0, 1)
     assert not graph.has_edge(0, 2)
+
+
+def test_compute_chunk_weights_emphasizes_similar_chunks():
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0], [1.0, 0.0]])
+    reference = np.array([1.0, 0.0])
+    weights = compute_chunk_weights(embeddings, reference=reference)
+    assert np.isclose(weights.sum(), 1.0)
+    assert weights[0] == weights[2] > weights[1]

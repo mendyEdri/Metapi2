@@ -18,6 +18,7 @@ from clustering import (
     cluster_embeddings,
     visualize_clusters,
     build_chunk_graph,
+    compute_chunk_weights,
 )
 
 
@@ -136,12 +137,13 @@ if api_key:
         if algorithm != "dbscan":
             k = min(k, len(embeddings))
         labels = cluster_embeddings(embeddings, algorithm=algorithm, n_clusters=k)
-        return chunks, embeddings, labels
+        weights = compute_chunk_weights(embeddings)
+        return chunks, embeddings, labels, weights
 
     if st.button("Analyze prompt"):
         if prompt.strip():
             try:
-                chunks, embeddings, labels = cluster_prompt(prompt)
+                chunks, embeddings, labels, weights = cluster_prompt(prompt)
             except ValueError as err:
                 st.error(str(err))
             else:
@@ -149,6 +151,16 @@ if api_key:
                 for idx, chunk in enumerate(chunks):
                     st.markdown(f"**Chunk {idx}**")
                     st.write(chunk)
+
+                st.subheader("Chunk weights (higher means more influence)")
+                sorted_idx = list(np.argsort(weights)[::-1])
+                for rank, idx in enumerate(sorted_idx):
+                    st.markdown(f"**Rank {rank + 1} – Chunk {idx} (weight={weights[idx]:.3f})**")
+                    st.write(chunks[idx])
+
+                st.subheader("Weighted prompt")
+                weighted_prompt = "\n\n".join(chunks[i] for i in sorted_idx)
+                st.code(weighted_prompt)
 
                 graph = build_chunk_graph(chunks, embeddings)
                 graph_fig, graph_ax = plt.subplots()
