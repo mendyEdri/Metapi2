@@ -9,7 +9,15 @@ from typing import Iterable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-import networkx as nx
+
+# ``networkx`` is an optional dependency. Importing it lazily ensures that
+# consumers who only need clustering utilities (e.g. ``compute_chunk_weights``)
+# can still use this module even if ``networkx`` isn't installed. The graph
+# building helper will raise a clear error when ``networkx`` is unavailable.
+try:  # pragma: no cover - tested indirectly via build_chunk_graph
+    import networkx as nx
+except ModuleNotFoundError:  # pragma: no cover - exercised when networkx missing
+    nx = None
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics.pairwise import cosine_similarity
@@ -165,6 +173,12 @@ def build_chunk_graph(
     networkx.Graph
         Undirected graph with one node per chunk and edges for similar chunks.
     """
+    if nx is None:  # pragma: no cover - exercised when networkx missing
+        raise ImportError(
+            "build_chunk_graph requires the 'networkx' package. Install it via"
+            " 'pip install networkx' to enable graph construction."
+        )
+
     texts = list(chunks)
     X = np.asarray(embeddings)
     if X.shape[0] != len(texts):
