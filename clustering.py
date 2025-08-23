@@ -106,7 +106,10 @@ def visualize_clusters(
     method = "PCA"
 
     fig, ax = plt.subplots()
-    ax.scatter(Y[:, 0], Y[:, 1], s=40)
+    labels_arr = np.asarray(list(labels))
+    ax.scatter(Y[:, 0], Y[:, 1], c=labels_arr, cmap="tab10", s=40)
+    for (x, y), label in zip(Y, labels_arr):
+        ax.text(x, y, str(label), ha="center", va="center", fontsize=9)
     ax.set_title(f"{title} • {method}")
     ax.set_xlabel("dim 1")
     ax.set_ylabel("dim 2")
