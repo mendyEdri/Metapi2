@@ -117,6 +117,14 @@ if api_key:
             "Number of clusters", min_value=2, max_value=10, value=3
         )
 
+    perplexity = st.number_input(
+        "t-SNE perplexity",
+        min_value=1.0,
+        max_value=100.0,
+        value=30.0,
+        step=1.0,
+    )
+
     def cluster_prompt(text: str):
         sentences = [
             s.strip()
@@ -142,7 +150,10 @@ if api_key:
             else:
                 try:
                     fig = visualize_clusters(
-                        embeddings, labels, title="Sentence clusters"
+                        embeddings,
+                        labels,
+                        title="Sentence clusters",
+                        perplexity=perplexity,
                     )
                 except ValueError as err:
                     st.warning(str(err))
