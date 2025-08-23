@@ -67,10 +67,17 @@ def visualize_clusters(
     if n_samples < 2:
         raise ValueError("At least two samples are required for t-SNE visualization.")
 
-    perplexity = min(30, n_samples - 1)
-    reduced = TSNE(n_components=2, random_state=42, perplexity=perplexity).fit_transform(
-        embeddings
-    )
+    # ``perplexity`` controls the balance between local and global aspects of the data
+    # when t-SNE builds its pairwise similarities.  The scikit-learn implementation
+    # requires ``0 < perplexity < n_samples``; with a small dataset the default value
+    # of ``30`` would violate this constraint and raise ``ValueError``.  Clamping the
+    # value here keeps it within the valid range so the visualization always works.
+    perplexity = max(1, min(30, n_samples - 1))
+    reduced = TSNE(
+        n_components=2,
+        random_state=42,
+        perplexity=perplexity,
+    ).fit_transform(embeddings)
     fig, ax = plt.subplots()
     ax.scatter(reduced[:, 0], reduced[:, 1], c=labels, cmap="tab10")
     ax.set_xlabel("TSNE-1")
