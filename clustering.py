@@ -1,7 +1,7 @@
 """Utility for clustering high-dimensional embeddings and visualizing the results.
 
 This module provides a helper to cluster embedding vectors using different
-scikit-learn algorithms and display the clusters using t-SNE for dimensionality
+scikit-learn algorithms and display the clusters using PCA for dimensionality
 reduction.
 """
 
@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import AgglomerativeClustering, DBSCAN, KMeans
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 
 # Mapping of algorithm names to their constructors. Functions accept the desired
 # number of clusters and return an instantiated estimator.
@@ -57,10 +56,9 @@ def visualize_clusters(
     embeddings: np.ndarray,
     labels: Iterable[int],
     title: str = "Sentence clusters",
-    perplexity: float = 30.0,
     random_state: int = 42,
 ) -> plt.Figure:
-    """Visualize clustered embeddings using t-SNE or PCA.
+    """Visualize clustered embeddings using PCA.
 
     Parameters
     ----------
@@ -70,8 +68,6 @@ def visualize_clusters(
         Iterable of cluster labels for each embedding.
     title:
         Plot title. Defaults to ``"Sentence clusters"``.
-    perplexity:
-        Desired t-SNE perplexity. Values outside ``(0, n_samples)`` are clamped.
     random_state:
         Random seed for reproducible dimensionality reduction.
 
@@ -94,21 +90,9 @@ def visualize_clusters(
         if n_samples < 2:
             raise ValueError("Not enough valid samples after removing NaN/Inf rows.")
 
-    if n_samples <= 3:
-        reducer = PCA(n_components=2, random_state=random_state)
-        Y = reducer.fit_transform(X)
-        method = "PCA (n≤3)"
-    else:
-        effective_perplexity = min(float(perplexity), max(1.0, n_samples - 1.0))
-        reducer = TSNE(
-            n_components=2,
-            perplexity=effective_perplexity,
-            init="pca",
-            random_state=random_state,
-            learning_rate="auto",
-        )
-        Y = reducer.fit_transform(X)
-        method = f"t-SNE (perp={effective_perplexity:.1f}, n={n_samples})"
+    reducer = PCA(n_components=2, random_state=random_state)
+    Y = reducer.fit_transform(X)
+    method = "PCA"
 
     fig, ax = plt.subplots()
     ax.scatter(Y[:, 0], Y[:, 1], s=40)
