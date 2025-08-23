@@ -7,13 +7,11 @@ generated and displayed.
 """
 
 import json
-import xml.etree.ElementTree as ET
 import numpy as np
 import matplotlib.pyplot as plt
 import networkx as nx
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from streamlit_js_eval import streamlit_js_eval
 from clustering import (
     cluster_embeddings,
@@ -21,6 +19,7 @@ from clustering import (
     build_chunk_graph,
     compute_chunk_weights,
 )
+from prompt_chunking import chunk_prompt
 
 
 st.title("Hello, World!")
@@ -126,19 +125,7 @@ if api_key:
         )
 
     def cluster_prompt(text: str):
-        try:
-            root = ET.fromstring(text)
-        except ET.ParseError:
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=500, chunk_overlap=50
-            )
-            chunks = [doc.page_content for doc in splitter.create_documents([text])]
-        else:
-            chunks = [
-                elem.text.strip()
-                for elem in root.iter()
-                if elem.text and elem.text.strip()
-            ]
+        chunks = chunk_prompt(text)
         if len(chunks) < 2:
             raise ValueError("Need at least two chunks for clustering.")
         vectors = [embedder.embed_query(chunk) for chunk in chunks]
