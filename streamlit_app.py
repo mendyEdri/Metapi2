@@ -1,17 +1,23 @@
 """Streamlit app demonstrating OpenAI embeddings via LangChain.
 
-The app provides a settings modal where users can supply an OpenAI API
-key. The key is persisted in the browser's local storage so it only needs
-to be entered once. When a key is available an example embedding for
-"Hello world" is generated and displayed.
+The app provides a settings modal where users can supply an OpenAI API key.
+The key is persisted in the browser's local storage so it only needs to be
+entered once. When a key is available an example embedding for "Hello world" is
+generated and displayed.
 """
 
+import json
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
 from streamlit_js_eval import streamlit_js_eval
 
 
 st.title("Hello, World!")
+
+
+def is_valid_openai_api_key(key: str) -> bool:
+    """Basic OpenAI API key validation."""
+    return isinstance(key, str) and key.startswith("sk-") and len(key) > 40
 
 
 def load_api_key() -> str:
@@ -47,42 +53,31 @@ st.button("Settings", on_click=open_settings)
 
 if st.session_state.get("show_settings"):
     with st.modal("Settings"):
-        st.text_input(
+        api_key_input = st.text_input(
             "OpenAI API Key",
             value=st.session_state.openai_api_key,
-            key="api_key_input",
             type="password",
         )
 
         col_save, col_close = st.columns(2)
         with col_save:
             if st.button("Save"):
-                st.session_state.openai_api_key = st.session_state.api_key_input
-                save_api_key(st.session_state.api_key_input)
-                close_settings()
+                if is_valid_openai_api_key(api_key_input):
+                    st.session_state.openai_api_key = api_key_input
+                    save_api_key(api_key_input)
+                    close_settings()
+                else:
+                    st.error(
+                        "Invalid API key format. Please enter a valid OpenAI API key."
+                    )
         with col_close:
             st.button("Close", on_click=close_settings)
 
 
 api_key = st.session_state.openai_api_key
-input_key = st.session_state.api_key_input
-if is_valid_openai_api_key(input_key):
-    st.session_state.openai_api_key = input_key
-    save_api_key(input_key)
-    close_settings()
-else:
-    st.error("Invalid API key format. Please enter a valid OpenAI API key (starts with 'sk-' and is the correct length).")
-    st.error("Invalid API key format. Please enter a valid OpenAI API key (starts with 'sk-' and is the correct length).")
-    with col_close:
-            st.button("Close", on_click=close_settings)
 
-
-api_key = st.session_state.openai_api_key
-if is_valid_openai_api_key(api_key):
-    embedder = OpenAIEmbeddings(
-        model="text-embedding-3-small", openai_api_key=api_key
-model_name = "text-embedding-3-small"
 if api_key:
+    model_name = "text-embedding-3-small"
     # Cache the embedder in session_state to avoid recreating it unnecessarily
     if (
         "embedder" not in st.session_state
@@ -96,14 +91,10 @@ if api_key:
         st.session_state.embedder_model = model_name
     embedder = st.session_state.embedder
 
-@st.cache_data(show_spinner="Generating embedding...")
-def get_hello_world_embedding(api_key: str):
-    embedder = OpenAIEmbeddings(
-        model="text-embedding-3-small", openai_api_key=api_key
-    )
-    return embedder.embed_query("Hello world")
+    @st.cache_data(show_spinner="Generating embedding...")
+    def get_hello_world_embedding(api_key: str):
+        return embedder.embed_query("Hello world")
 
-if api_key:
     vector = get_hello_world_embedding(api_key)
     st.write(vector)
 else:
