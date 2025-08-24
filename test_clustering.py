@@ -1,7 +1,13 @@
 import numpy as np
+import pytest
 from matplotlib.figure import Figure
 
-from clustering import build_chunk_graph, visualize_clusters, compute_chunk_weights
+from clustering import (
+    build_chunk_graph,
+    compute_chunk_weights,
+    rank_chunks,
+    visualize_clusters,
+)
 
 
 def test_visualize_clusters_uses_pca():
@@ -40,3 +46,21 @@ def test_compute_chunk_weights_emphasizes_similar_chunks():
     weights = compute_chunk_weights(embeddings, reference=reference)
     assert np.isclose(weights.sum(), 1.0)
     assert weights[0] == weights[2] > weights[1]
+
+
+def test_rank_chunks_pagerank_highlights_connected_nodes():
+    chunks = ["alpha", "alpha variant", "beta"]
+    embeddings = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]])
+    graph = build_chunk_graph(chunks, embeddings, threshold=0.85)
+    ranking = rank_chunks(graph, method="pagerank")
+    # first two nodes are connected and should outrank the isolated third node
+    assert ranking[0][0] in {0, 1}
+    assert ranking[-1][0] == 2
+
+
+def test_rank_chunks_rejects_unknown_method():
+    chunks = ["alpha", "beta"]
+    embeddings = np.array([[1.0, 0.0], [0.0, 1.0]])
+    graph = build_chunk_graph(chunks, embeddings, threshold=0.5)
+    with pytest.raises(ValueError):
+        rank_chunks(graph, method="unknown")

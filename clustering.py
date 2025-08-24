@@ -292,6 +292,47 @@ def build_chunk_graph(
     return graph
 
 
+def rank_chunks(graph: "nx.Graph", method: str = "pagerank") -> list[tuple[int, float]]:
+    """Rank nodes in ``graph`` using a centrality measure.
+
+    Parameters
+    ----------
+    graph:
+        Graph whose nodes correspond to prompt chunks. The node identifiers are
+        expected to be integer indices.
+    method:
+        Centrality measure to use. Options are ``"pagerank"``,
+        ``"eigenvector"``, ``"closeness"`` and ``"betweenness"``. The default
+        is PageRank.
+
+    Returns
+    -------
+    list[tuple[int, float]]
+        A list of ``(node_index, score)`` pairs sorted from most to least
+        central.
+    """
+
+    if nx is None:  # pragma: no cover - exercised when networkx missing
+        raise ImportError(
+            "rank_chunks requires the 'networkx' package. Install it via 'pip "
+            "install networkx' to enable ranking."
+        )
+
+    method = method.lower()
+    if method == "pagerank":
+        centrality = nx.pagerank(graph, weight="weight")
+    elif method == "eigenvector":
+        centrality = nx.eigenvector_centrality(graph, weight="weight")
+    elif method == "closeness":
+        centrality = nx.closeness_centrality(graph)
+    elif method == "betweenness":
+        centrality = nx.betweenness_centrality(graph)
+    else:
+        raise ValueError(f"Unsupported ranking method: {method}")
+
+    return sorted(centrality.items(), key=lambda item: item[1], reverse=True)
+
+
 if __name__ == "__main__":
     # Example usage with the Iris dataset.
     from sklearn.datasets import load_iris
@@ -312,4 +353,5 @@ __all__ = [
     "geometric_median",
     "compute_prompt_center",
     "build_chunk_graph",
+    "rank_chunks",
 ]
