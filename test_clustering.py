@@ -48,6 +48,15 @@ def test_compute_chunk_weights_emphasizes_similar_chunks():
     assert weights[0] == weights[2] > weights[1]
 
 
+def test_compute_chunk_weights_center_downweights_outlier():
+    embeddings = np.array([[1.0, 0.0], [1.0, 0.0], [1.0, 0.0], [-1.0, 0.0]])
+    weights = compute_chunk_weights(embeddings, method="center")
+    assert np.isclose(weights.sum(), 1.0)
+    # the outlier opposite to the center should receive the lowest weight
+    assert weights[3] < weights[0]
+    assert np.allclose(weights[:3], weights[0], atol=1e-6)
+
+
 def test_rank_chunks_pagerank_highlights_connected_nodes():
     chunks = ["alpha", "alpha variant", "beta"]
     embeddings = np.array([[1.0, 0.0], [0.9, 0.1], [0.0, 1.0]])

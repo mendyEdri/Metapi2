@@ -124,6 +124,13 @@ if api_key:
             "Number of clusters", min_value=2, max_value=10, value=3
         )
 
+    weight_method = st.selectbox(
+        "Chunk weight method",
+        ["cosine", "center"],
+        index=0,
+        help="`cosine` weights by similarity to the centroid; `center` downweights outliers",
+    )
+
     def cluster_prompt(text: str):
         chunks = chunk_prompt(text)
         if len(chunks) < 2:
@@ -134,7 +141,7 @@ if api_key:
         if algorithm != "dbscan":
             k = min(k, len(embeddings))
         labels = cluster_embeddings(embeddings, algorithm=algorithm, n_clusters=k)
-        weights = compute_chunk_weights(embeddings)
+        weights = compute_chunk_weights(embeddings, method=weight_method)
         return chunks, embeddings, labels, weights
 
     if st.button("Analyze prompt"):
@@ -151,7 +158,9 @@ if api_key:
                         st.markdown(f"Weight: {weights[idx]:.3f}")
                         st.markdown(f"Cluster: {labels[idx]}")
 
-                st.subheader("Chunk weights (higher means more influence)")
+                st.subheader(
+                    f"Chunk weights • {weight_method} method (higher means more influence)"
+                )
                 sorted_idx = list(np.argsort(weights)[::-1])
                 for rank, idx in enumerate(sorted_idx):
                     st.markdown(
