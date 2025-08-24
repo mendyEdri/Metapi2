@@ -5,7 +5,7 @@ scikit-learn algorithms and display the clusters using PCA for dimensionality
 reduction.
 """
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -161,6 +161,92 @@ def compute_chunk_weights(
     return weights
 
 
+def geometric_median(
+    points: np.ndarray, max_iter: int = 500, tol: float = 1e-5
+) -> np.ndarray:
+    """Compute the geometric median of ``points`` using Weiszfeld's algorithm.
+
+    Parameters
+    ----------
+    points:
+        Array of shape ``(n_samples, n_features)`` containing the vectors.
+    max_iter:
+        Maximum number of iterations to perform. Defaults to ``500``.
+    tol:
+        Convergence tolerance. Iteration stops when the update step is smaller
+        than ``tol``. Defaults to ``1e-5``.
+
+    Returns
+    -------
+    np.ndarray
+        The geometric median vector.
+    """
+
+    X = np.asarray(points, dtype=float)
+    if X.ndim != 2:
+        raise ValueError("points must be a 2D array")
+
+    # Initialize at the arithmetic mean which is a reasonable starting point
+    y = X.mean(axis=0)
+    for _ in range(max_iter):
+        diff = X - y
+        dist = np.linalg.norm(diff, axis=1)
+        nonzero = dist > tol
+        if not np.any(nonzero):
+            break
+        inv_dist = 1.0 / dist[nonzero]
+        y_new = (X[nonzero] * inv_dist[:, None]).sum(axis=0) / inv_dist.sum()
+        if np.linalg.norm(y - y_new) < tol:
+            y = y_new
+            break
+        y = y_new
+    return y
+
+
+def compute_prompt_center(
+    embeddings: np.ndarray, max_iter: int = 500, tol: float = 1e-5
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return a robust center and angular distances for ``embeddings``.
+
+    The function first normalizes all embeddings to unit length, computes the
+    geometric median as a robust estimate of the prompt's central direction and
+    finally determines the angular distance of each chunk from that center.
+
+    Parameters
+    ----------
+    embeddings:
+        Array of shape ``(n_samples, n_features)`` with embedding vectors.
+    max_iter, tol:
+        Parameters forwarded to :func:`geometric_median`.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        A tuple containing the unit-norm center vector and an array with the
+        angular distance (in radians) for each embedding.
+    """
+
+    X = np.asarray(embeddings, dtype=float)
+    if X.ndim != 2:
+        raise ValueError("embeddings must be a 2D array")
+
+    # Normalize all embeddings to unit vectors
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    X_unit = X / norms
+
+    center = geometric_median(X_unit, max_iter=max_iter, tol=tol)
+    center_norm = np.linalg.norm(center)
+    if center_norm == 0:
+        raise ValueError("geometric median is the zero vector")
+    center /= center_norm
+
+    # Angular distance via arccos of the cosine similarity to the center
+    cos_sim = np.clip(X_unit @ center, -1.0, 1.0)
+    radial = np.arccos(cos_sim)
+    return center, radial
+
+
 def build_chunk_graph(
     chunks: Iterable[str],
     embeddings: np.ndarray,
@@ -223,5 +309,7 @@ __all__ = [
     "cluster_embeddings",
     "visualize_clusters",
     "compute_chunk_weights",
+    "geometric_median",
+    "compute_prompt_center",
     "build_chunk_graph",
 ]
