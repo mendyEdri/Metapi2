@@ -126,21 +126,28 @@ def visualize_clusters(
 def compute_chunk_weights(
     embeddings: np.ndarray,
     reference: Optional[np.ndarray] = None,
+    method: str = "cosine",
 ) -> np.ndarray:
     """Compute softmax-normalized weights for each embedding.
 
-    The weight for a chunk is derived from its cosine similarity to a reference
-    vector. When ``reference`` is ``None`` the centroid of all embeddings is
-    used. The similarities are converted to a probability distribution via a
-    softmax so that the weights sum to 1.
+    Two strategies are available:
+
+    ``"cosine"`` (default)
+        Weights are derived from the cosine similarity to ``reference``. When
+        ``reference`` is ``None`` the centroid of all embeddings is used.
+    ``"center"``
+        Computes a robust center using :func:`compute_prompt_center` and assigns
+        higher weights to chunks that lie closer (in angular distance) to that
+        center.
 
     Parameters
     ----------
     embeddings:
         Array of shape ``(n_samples, n_features)`` containing the embeddings.
     reference:
-        Optional reference vector. If ``None`` the centroid of ``embeddings``
-        is used.
+        Optional reference vector. Used only when ``method`` is ``"cosine"``.
+    method:
+        Weighting strategy. Options are ``"cosine"`` and ``"center"``.
 
     Returns
     -------
@@ -151,14 +158,18 @@ def compute_chunk_weights(
     if X.ndim != 2:
         raise ValueError("embeddings must be a 2D array")
 
-    ref = np.asarray(reference) if reference is not None else X.mean(axis=0)
-    ref = ref.reshape(1, -1)
-    sims = cosine_similarity(X, ref).ravel()
-
-    # Numerical stability: subtract max before exponentiating
-    exp_scores = np.exp(sims - np.max(sims))
-    weights = exp_scores / exp_scores.sum()
-    return weights
+    method = method.lower()
+    if method == "cosine":
+        ref = np.asarray(reference) if reference is not None else X.mean(axis=0)
+        ref = ref.reshape(1, -1)
+        sims = cosine_similarity(X, ref).ravel()
+        exp_scores = np.exp(sims - np.max(sims))
+        return exp_scores / exp_scores.sum()
+    if method == "center":
+        _, radial = compute_prompt_center(X)
+        exp_scores = np.exp(-radial)
+        return exp_scores / exp_scores.sum()
+    raise ValueError(f"Unsupported weighting method: {method}")
 
 
 def geometric_median(
