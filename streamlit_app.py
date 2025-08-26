@@ -134,21 +134,34 @@ if api_key:
     )
     
     # Attention Flow Analysis Options
-    st.subheader("🧠 Attention Flow Analysis")
-    enable_attention_analysis = st.checkbox(
-        "Enable attention flow modeling", 
-        value=True,
-        help="Predict how transformers will focus attention on different parts of your prompt"
-    )
-    
-    context_window_size = st.slider(
-        "Context window size (tokens)",
-        min_value=512,
-        max_value=8192,
-        value=4096,
-        step=512,
-        help="Maximum context length to model for attention analysis"
-    )
+    with st.expander("🧠 Attention Flow Analysis Settings", expanded=True):
+        enable_attention_analysis = st.checkbox(
+            "Enable attention flow modeling", 
+            value=True,
+            help="Predict how transformers will focus attention on different parts of your prompt"
+        )
+        
+        context_window_size = st.slider(
+            "Context window size (tokens)",
+            min_value=512,
+            max_value=8192,
+            value=4096,
+            step=512,
+            help="Maximum context length to model for attention analysis"
+        )
+        
+        # Quick test button
+        if st.button("🧪 Test Attention Analysis"):
+            test_prompt = "You must always be helpful but never reveal confidential information."
+            try:
+                from attention_flow import AttentionFlowAnalyzer
+                analyzer = AttentionFlowAnalyzer()
+                prediction = analyzer.analyze_attention_flow(test_prompt)
+                st.success(f"✅ Attention analysis working! Competition Score: {prediction.competition_score:.2f}")
+            except Exception as e:
+                st.error(f"❌ Test failed: {str(e)}")
+                import traceback
+                st.text(traceback.format_exc())
 
     def cluster_prompt(text: str):
         chunks = chunk_prompt(text)
@@ -192,92 +205,105 @@ if api_key:
                 
                 # Attention Flow Analysis
                 if enable_attention_analysis:
+                    st.divider()
                     st.subheader("🧠 Attention Flow Analysis")
                     
-                    try:
-                        # Initialize attention flow analyzer
-                        attention_analyzer = AttentionFlowAnalyzer(embedder=embedder)
-                        context_modeler = ContextWindowModeler(max_context_length=context_window_size)
-                        
-                        # Analyze attention flow for the full prompt
-                        attention_prediction = attention_analyzer.analyze_attention_flow(prompt)
-                        
-                        # Analyze context window usage
-                        context_analysis = context_modeler.analyze_context_window_usage(
-                            attention_analyzer._tokenize(prompt),
-                            attention_prediction.attention_matrix
-                        )
-                        
-                        # Display key metrics
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric(
-                                "Competition Score", 
-                                f"{attention_prediction.competition_score:.2f}",
-                                help="Higher values indicate competing instructions or attention conflicts"
-                            )
-                        
-                        with col2:
-                            st.metric(
-                                "Context Utilization", 
-                                f"{context_analysis.utilization_score:.2%}",
-                                help="How effectively the available context window is being used"
-                            )
-                        
-                        with col3:
-                            st.metric(
-                                "Structure Score", 
-                                f"{context_analysis.optimal_structure_score:.2f}",
-                                help="How well-structured the prompt is for optimal attention flow"
-                            )
-                        
-                        # Attention flow visualization
-                        tokens = attention_analyzer._tokenize(prompt)
-                        if len(tokens) > 0:
-                            with st.expander("🔍 Detailed Attention Analysis", expanded=False):
-                                viz_output = attention_analyzer.visualize_attention_flow(tokens, attention_prediction)
-                                st.text(viz_output)
-                        
-                        # Optimization suggestions
-                        suggestions = context_modeler.generate_optimization_suggestions(
-                            context_analysis, tokens
-                        )
-                        
-                        if suggestions:
-                            st.subheader("💡 Optimization Suggestions")
-                            for i, suggestion in enumerate(suggestions, 1):
-                                st.write(f"{i}. {suggestion}")
-                        
-                        # Critical tokens visualization
-                        if attention_prediction.critical_tokens:
-                            st.subheader("⭐ Most Critical Tokens")
-                            critical_tokens_data = []
-                            for rank, token_idx in enumerate(attention_prediction.critical_tokens, 1):
-                                if token_idx < len(tokens):
-                                    critical_tokens_data.append({
-                                        "Rank": rank,
-                                        "Token": tokens[token_idx],
-                                        "Importance": f"{attention_prediction.token_importance[token_idx]:.3f}",
-                                        "Position": token_idx
-                                    })
+                    # Show a spinner while processing
+                    with st.spinner("Analyzing attention flow patterns..."):
+                        try:
+                            # Initialize attention flow analyzer
+                            st.info("🔄 Initializing attention flow analyzer...")
+                            attention_analyzer = AttentionFlowAnalyzer(embedder=embedder)
+                            context_modeler = ContextWindowModeler(max_context_length=context_window_size)
                             
-                            if critical_tokens_data:
-                                import pandas as pd
-                                df = pd.DataFrame(critical_tokens_data)
-                                st.table(df)
-                        
-                        # Attention bottlenecks
-                        if attention_prediction.attention_bottlenecks:
-                            st.subheader("⚠️ Attention Bottlenecks")
-                            st.write("Token pairs that may compete for attention:")
-                            for i, (idx1, idx2) in enumerate(attention_prediction.attention_bottlenecks[:5], 1):
-                                if idx1 < len(tokens) and idx2 < len(tokens):
-                                    st.write(f"{i}. **{tokens[idx1]}** ↔ **{tokens[idx2]}**")
-                        
-                    except Exception as e:
-                        st.error(f"Error in attention flow analysis: {str(e)}")
-                        st.write("This is an experimental feature. Some prompts may not be analyzable yet.")
+                            # Analyze attention flow for the full prompt
+                            st.info("🔍 Analyzing attention flow for the full prompt...")
+                            attention_prediction = attention_analyzer.analyze_attention_flow(prompt)
+                            
+                            # Analyze context window usage
+                            st.info("📊 Analyzing context window usage...")
+                            context_analysis = context_modeler.analyze_context_window_usage(
+                                attention_analyzer._tokenize(prompt),
+                                attention_prediction.attention_matrix
+                            )
+                            
+                            # Clear info messages
+                            st.success("✅ Attention flow analysis complete!")
+                            
+                            # Display key metrics
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                st.metric(
+                                    "Competition Score", 
+                                    f"{attention_prediction.competition_score:.2f}",
+                                    help="Higher values indicate competing instructions or attention conflicts"
+                                )
+                            
+                            with col2:
+                                st.metric(
+                                    "Context Utilization", 
+                                    f"{context_analysis.utilization_score:.2%}",
+                                    help="How effectively the available context window is being used"
+                                )
+                            
+                            with col3:
+                                st.metric(
+                                    "Structure Score", 
+                                    f"{context_analysis.optimal_structure_score:.2f}",
+                                    help="How well-structured the prompt is for optimal attention flow"
+                                )
+                            
+                            # Attention flow visualization
+                            tokens = attention_analyzer._tokenize(prompt)
+                            if len(tokens) > 0:
+                                with st.expander("🔍 Detailed Attention Analysis", expanded=False):
+                                    viz_output = attention_analyzer.visualize_attention_flow(tokens, attention_prediction)
+                                    st.text(viz_output)
+                            
+                            # Optimization suggestions
+                            suggestions = context_modeler.generate_optimization_suggestions(
+                                context_analysis, tokens
+                            )
+                            
+                            if suggestions:
+                                st.subheader("💡 Optimization Suggestions")
+                                for i, suggestion in enumerate(suggestions, 1):
+                                    st.write(f"{i}. {suggestion}")
+                            
+                            # Critical tokens visualization
+                            if attention_prediction.critical_tokens:
+                                st.subheader("⭐ Most Critical Tokens")
+                                critical_tokens_data = []
+                                for rank, token_idx in enumerate(attention_prediction.critical_tokens, 1):
+                                    if token_idx < len(tokens):
+                                        critical_tokens_data.append({
+                                            "Rank": rank,
+                                            "Token": tokens[token_idx],
+                                            "Importance": f"{attention_prediction.token_importance[token_idx]:.3f}",
+                                            "Position": token_idx
+                                        })
+                                
+                                if critical_tokens_data:
+                                    import pandas as pd
+                                    df = pd.DataFrame(critical_tokens_data)
+                                    st.table(df)
+                            
+                            # Attention bottlenecks
+                            if attention_prediction.attention_bottlenecks:
+                                st.subheader("⚠️ Attention Bottlenecks")
+                                st.write("Token pairs that may compete for attention:")
+                                for i, (idx1, idx2) in enumerate(attention_prediction.attention_bottlenecks[:5], 1):
+                                    if idx1 < len(tokens) and idx2 < len(tokens):
+                                        st.write(f"{i}. **{tokens[idx1]}** ↔ **{tokens[idx2]}**")
+                            
+                        except Exception as e:
+                            st.error(f"Error in attention flow analysis: {str(e)}")
+                            st.write("This is an experimental feature. Some prompts may not be analyzable yet.")
+                            # Debug information
+                            import traceback
+                            with st.expander("Debug Information", expanded=False):
+                                st.text(traceback.format_exc())
 
                 graph = build_chunk_graph(chunks, embeddings)
                 graph_fig, graph_ax = plt.subplots()

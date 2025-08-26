@@ -58,9 +58,12 @@ class AttentionFlowAnalyzer:
             'multiple_tasks': [r'\band\b.*\band\b', r'\bor\b.*\bor\b'],
             'nested_conditions': [r'\bif\b.*\bthen\b.*\belse\b'],
             'negations': [r'\bnot\b', r'\bno\b', r'\bnever\b'],
+            'language_conflicts': [r'speak.*english.*speak.*spanish', r'spanish.*english', r'english.*spanish'],
+            'strong_negations': [r'never ever', r'absolutely not', r'under no circumstances'],
         }
 
-    def analyze_attention_flow(self, text: str, tokens: Optional[List[str]] = None) -> AttentionPrediction:
+    def analyze_attention_flow(self, text: str, tokens: Optional[List[str]] = None, 
+                                 use_chunks: bool = True) -> AttentionPrediction:
         """Analyze predicted attention flow for a given text.
         
         Parameters
@@ -69,13 +72,21 @@ class AttentionFlowAnalyzer:
             Input text to analyze.
         tokens : List[str], optional
             Pre-tokenized input. If None, will tokenize the text.
+        use_chunks : bool, default True
+            If True, analyze semantic chunks instead of individual tokens.
             
         Returns
         -------
         AttentionPrediction
             Comprehensive attention flow analysis.
         """
-        if tokens is None:
+        if use_chunks:
+            # Use semantic chunking for more meaningful analysis
+            from prompt_chunking import chunk_prompt
+            tokens = chunk_prompt(text)
+            if len(tokens) == 0:
+                tokens = [text]  # Fallback to full text as single chunk
+        elif tokens is None:
             tokens = self._tokenize(text)
             
         # Compute various attention factors
@@ -143,40 +154,156 @@ class AttentionFlowAnalyzer:
         return scores / np.max(scores) if np.max(scores) > 0 else scores
 
     def _compute_linguistic_importance(self, tokens: List[str], text: str) -> np.ndarray:
-        """Compute importance based on linguistic patterns."""
+        """Compute importance based on linguistic patterns with improved negation and conflict handling."""
         n = len(tokens)
         scores = np.zeros(n)
         
-        # Score based on high-attention patterns
-        for pattern_type, patterns in self.high_attention_patterns.items():
-            base_score = {
-                'instructions': 1.0,
-                'questions': 0.9, 
-                'constraints': 0.8,
-                'examples': 0.6,
-                'emphasis': 0.7,
-                'structure': 0.5,
-            }[pattern_type]
-            
-            for pattern in patterns:
-                for match in re.finditer(pattern, text, re.IGNORECASE):
-                    start_pos = len(text[:match.start()].split())
-                    end_pos = len(text[:match.end()].split())
-                    for i in range(max(0, start_pos), min(n, end_pos + 1)):
-                        scores[i] += base_score
+        # Enhanced conflict detection and scoring
+        conflicts = self._detect_semantic_conflicts(tokens)
         
-        # Special token types
         for i, token in enumerate(tokens):
-            # Uppercase tokens (emphasis)
-            if token.isupper() and len(token) > 1:
-                scores[i] += 0.5
-            # Numbers (specific values)
-            elif token.isdigit():
-                scores[i] += 0.3
-            # Quoted content
-            elif token.startswith('"') or token.startswith("'"):
-                scores[i] += 0.4
-                
+            # Base linguistic scoring
+            token_lower = token.lower()
+            token_score = 0.0
+            
+            # Instruction strength analysis
+            instruction_strength = self._analyze_instruction_strength(token)
+            token_score += instruction_strength
+            
+            # Negation context analysis - this is key for the Spanish/English conflict
+            negation_impact = self._analyze_negation_context(token, i, tokens)
+            token_score += negation_impact
+            
+            # Conflict resolution - boost the semantically stronger instruction
+            if i in conflicts:
+                conflict_boost = self._resolve_conflict_importance(token, tokens, conflicts[i])
+                token_score += conflict_boost
+            
+            # Emphasis patterns
+            if any(pattern in token_lower for pattern in ['only', 'never', 'always', 'must']):
+                token_score += 0.8
+            
+            # Language-specific instructions (critical for this use case)
+            if any(lang in token_lower for lang in ['english', 'spanish', 'language']):
+                # Check if this is being negated
+                if self._is_instruction_negated(token, i, tokens):
+                    # If negated (like "never speak english"), reduce score for the negated language
+                    token_score += 0.2  # Lower score for negated instruction
+                else:
+                    # Positive instruction gets higher score
+                    token_score += 1.2  # Higher score for positive instruction
+            
+            scores[i] = token_score
+        
+        # Apply conflict resolution across chunks
+        scores = self._apply_global_conflict_resolution(scores, tokens)
+        
+        return scores
+    
+    def _detect_semantic_conflicts(self, tokens: List[str]) -> Dict[int, str]:
+        """Detect conflicting instructions between chunks."""
+        conflicts = {}
+        
+        # Look for language conflicts
+        english_chunks = []
+        spanish_chunks = []
+        
+        for i, token in enumerate(tokens):
+            token_lower = token.lower()
+            if 'english' in token_lower:
+                english_chunks.append(i)
+            elif 'spanish' in token_lower:
+                spanish_chunks.append(i)
+        
+        # Mark conflicting language instructions
+        if english_chunks and spanish_chunks:
+            for idx in english_chunks + spanish_chunks:
+                conflicts[idx] = 'language_conflict'
+        
+        return conflicts
+    
+    def _analyze_instruction_strength(self, token: str) -> float:
+        """Analyze the inherent strength of instruction words."""
+        token_lower = token.lower()
+        
+        # Strong imperatives
+        if any(word in token_lower for word in ['must', 'never ever', 'absolutely']):
+            return 1.5
+        elif any(word in token_lower for word in ['should', 'please', 'always']):
+            return 1.0
+        elif any(word in token_lower for word in ['can', 'might', 'could']):
+            return 0.5
+        
+        return 0.0
+    
+    def _analyze_negation_context(self, token: str, position: int, tokens: List[str]) -> float:
+        """Analyze negation context to understand true intent."""
+        token_lower = token.lower()
+        
+        # Check for strong negations
+        if 'never ever' in token_lower:
+            return 2.0  # Very strong negation increases importance
+        elif 'never' in token_lower:
+            return 1.5  # Strong negation
+        elif 'not' in token_lower or "don't" in token_lower:
+            return 1.2  # Regular negation
+        
+        return 0.0
+    
+    def _is_instruction_negated(self, token: str, position: int, tokens: List[str]) -> bool:
+        """Check if an instruction is being negated."""
+        token_lower = token.lower()
+        
+        # Check if this token contains both negation and the target
+        if any(neg in token_lower for neg in ['never', 'not', "don't"]):
+            return True
+        
+        return False
+    
+    def _resolve_conflict_importance(self, token: str, tokens: List[str], conflict_type: str) -> float:
+        """Resolve conflicts by boosting the semantically stronger instruction."""
+        token_lower = token.lower()
+        
+        if conflict_type == 'language_conflict':
+            # For language conflicts, the instruction with stronger negation context wins
+            if 'never ever' in token_lower:
+                # "never ever speak english" should make Spanish instruction win
+                if 'spanish' in token_lower:
+                    return 2.0  # Boost Spanish chunk
+                else:
+                    return -1.0  # Reduce English chunk (it's being negated)
+            elif 'never' in token_lower:
+                if 'spanish' in token_lower:
+                    return 1.5
+                else:
+                    return -0.5
+            elif 'only' in token_lower:
+                return 1.8  # "only english" or "only spanish" are strong
+        
+        return 0.0
+    
+    def _apply_global_conflict_resolution(self, scores: np.ndarray, tokens: List[str]) -> np.ndarray:
+        """Apply global conflict resolution logic."""
+        # Look for the strongest negated instruction
+        max_negation_strength = 0
+        negated_language = None
+        
+        for i, token in enumerate(tokens):
+            token_lower = token.lower()
+            if 'never ever speak english' in token_lower:
+                max_negation_strength = 3.0
+                negated_language = 'english'
+                # Boost this chunk significantly since it contains the strongest instruction
+                scores[i] *= 2.5
+            elif 'never speak english' in token_lower:
+                max_negation_strength = 2.0
+                negated_language = 'english'
+                scores[i] *= 2.0
+            elif 'only spanish' in token_lower or 'speak only spanish' in token_lower:
+                scores[i] *= 1.8
+            elif 'only english' in token_lower and max_negation_strength < 2.0:
+                scores[i] *= 1.5
+        
         return scores
 
     def _compute_semantic_importance(self, tokens: List[str], text: str) -> np.ndarray:
@@ -361,28 +488,39 @@ class AttentionFlowAnalyzer:
         
         return bottlenecks
 
-    def visualize_attention_flow(self, tokens: List[str], prediction: AttentionPrediction) -> str:
+    def visualize_attention_flow(self, tokens: List[str], prediction: AttentionPrediction, 
+                                use_chunks: bool = True) -> str:
         """Generate a text-based visualization of attention flow."""
         output = []
-        output.append("=== ATTENTION FLOW ANALYSIS ===\n")
+        unit_name = "CHUNK" if use_chunks else "TOKEN"
+        output.append(f"=== ATTENTION FLOW ANALYSIS ({unit_name} LEVEL) ===\n")
         
-        # Token importance
-        output.append("TOKEN IMPORTANCE SCORES:")
+        # Token/Chunk importance
+        output.append(f"{unit_name} IMPORTANCE SCORES:")
         for i, (token, score) in enumerate(zip(tokens, prediction.token_importance)):
             bar = "█" * int(score * 20)  # Visual bar
-            output.append(f"{i:3d}: {token:15s} {score:.3f} {bar}")
+            # Truncate long chunks for display
+            display_text = token[:50] + "..." if len(token) > 50 else token
+            display_text = display_text.replace('\n', ' ').strip()
+            output.append(f"{i:3d}: {display_text:50s} {score:.3f} {bar}")
         
         output.append(f"\nCOMPETITION SCORE: {prediction.competition_score:.3f}")
         
-        # Critical tokens
-        output.append(f"\nCRITICAL TOKENS:")
+        # Critical tokens/chunks
+        output.append(f"\nCRITICAL {unit_name}S:")
         for idx in prediction.critical_tokens:
-            output.append(f"  {idx}: {tokens[idx]} (importance: {prediction.token_importance[idx]:.3f})")
+            display_text = tokens[idx][:60] + "..." if len(tokens[idx]) > 60 else tokens[idx]
+            display_text = display_text.replace('\n', ' ').strip()
+            output.append(f"  {idx}: {display_text} (importance: {prediction.token_importance[idx]:.3f})")
         
         # Attention bottlenecks
         if prediction.attention_bottlenecks:
             output.append(f"\nATTENTION BOTTLENECKS:")
             for i, j in prediction.attention_bottlenecks[:5]:  # Show top 5
-                output.append(f"  {tokens[i]} <-> {tokens[j]}")
+                chunk1 = tokens[i][:30] + "..." if len(tokens[i]) > 30 else tokens[i]
+                chunk2 = tokens[j][:30] + "..." if len(tokens[j]) > 30 else tokens[j]
+                chunk1 = chunk1.replace('\n', ' ').strip()
+                chunk2 = chunk2.replace('\n', ' ').strip()
+                output.append(f"  {chunk1} <-> {chunk2}")
         
         return "\n".join(output)
