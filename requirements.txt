@@ -5,3 +5,8 @@ scikit-learn
 matplotlib
 langchain-text-splitters
 networkx
+numpy
+scipy
+pandas
+pytest
+seaborn
