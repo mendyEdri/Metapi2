@@ -10,3 +10,4 @@ scipy
 pandas
 pytest
 seaborn
+scikit-learn

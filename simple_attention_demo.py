@@ -497,6 +497,267 @@ if st.button("🚀 Analyze Attention Flow", type="primary", use_container_width=
                                 st.write("**Chunk Contents:**")
                                 for i, chunk in enumerate(chunks):
                                     st.write(f"**Chunk {i+1}:** {chunk[:100]}{'...' if len(chunk) > 100 else ''}")
+                            
+                            # Add cluster analysis section
+                            st.subheader("🎭 Cluster Analysis")
+                            st.write("Discover thematic groups in your system prompt to understand how it affects LLM behavior.")
+                            
+                            # Clustering controls
+                            cluster_col1, cluster_col2, cluster_col3 = st.columns([2, 1, 1])
+                            with cluster_col1:
+                                clustering_method = st.selectbox(
+                                    "Clustering Method",
+                                    ["Auto-detect", "Hierarchical", "K-means"],
+                                    index=0,
+                                    help="Choose how to group similar chunks"
+                                )
+                            
+                            with cluster_col2:
+                                manual_clusters = st.checkbox("Manual cluster count", value=False)
+                            
+                            with cluster_col3:
+                                if manual_clusters:
+                                    n_clusters = st.slider("Number of clusters", 2, min(8, len(chunks)), 3)
+                                else:
+                                    n_clusters = None
+                            
+                            # Perform clustering analysis
+                            with st.spinner("Analyzing thematic clusters..."):
+                                clustering_results = semantic_analyzer.perform_clustering_analysis(
+                                    chunks, 
+                                    similarity_matrix, 
+                                    method=clustering_method.lower().replace('-', ''),
+                                    n_clusters=n_clusters
+                                )
+                            
+                            # Show all 3 visualizations
+                            cluster_tabs = st.tabs(["📊 Feature Overview", "🎯 Cluster Matrix", "🔥 Similarity with Boundaries"])
+                            
+                            # Tab 1: Feature Overview Dashboard
+                            with cluster_tabs[0]:
+                                st.write("**🎯 Your System Prompt Structure:**")
+                                
+                                analysis = clustering_results['cluster_analysis']
+                                n_clusters_found = clustering_results['n_clusters']
+                                silhouette = clustering_results['silhouette_score']
+                                
+                                # Overview metrics
+                                overview_col1, overview_col2, overview_col3 = st.columns(3)
+                                with overview_col1:
+                                    st.metric("Themes Detected", n_clusters_found)
+                                with overview_col2:
+                                    st.metric("Quality Score", f"{silhouette:.2f}")
+                                with overview_col3:
+                                    st.metric("Total Chunks", len(chunks))
+                                
+                                # Feature breakdown
+                                for cluster_id, cluster_info in analysis.items():
+                                    theme = cluster_info['theme']
+                                    chunk_indices = cluster_info['chunk_indices']
+                                    cohesion = cluster_info['cohesion']
+                                    
+                                    with st.expander(f"🔹 **{theme}** ({len(chunk_indices)} chunks, cohesion: {cohesion:.2f})", expanded=True):
+                                        for i, chunk_idx in enumerate(chunk_indices):
+                                            chunk_preview = chunks[chunk_idx][:80] + "..." if len(chunks[chunk_idx]) > 80 else chunks[chunk_idx]
+                                            st.write(f"**Chunk {chunk_idx+1}:** {chunk_preview}")
+                                        
+                                        # Show concepts for this cluster
+                                        if cluster_info['concepts']:
+                                            st.write("**Key Concepts:**")
+                                            for concept_type, items in cluster_info['concepts'].items():
+                                                if items:
+                                                    st.write(f"- *{concept_type.title()}*: {', '.join(items)}")
+                            
+                            # Tab 2: Cluster Assignment Matrix
+                            with cluster_tabs[1]:
+                                st.write("**Binary assignment showing which chunks belong to each cluster:**")
+                                
+                                # Create assignment matrix
+                                assignment_matrix = np.zeros((len(chunks), n_clusters_found))
+                                for i, label in enumerate(clustering_results['labels']):
+                                    assignment_matrix[i, label] = 1
+                                
+                                # Plot assignment matrix
+                                fig_assign, ax_assign = plt.subplots(figsize=(max(6, n_clusters_found * 1.5), max(4, len(chunks) * 0.4)))
+                                
+                                im = ax_assign.imshow(assignment_matrix, cmap='RdYlBu_r', aspect='auto')
+                                
+                                # Add text annotations
+                                for i in range(len(chunks)):
+                                    for j in range(n_clusters_found):
+                                        text = "●" if assignment_matrix[i, j] == 1 else "○"
+                                        ax_assign.text(j, i, text, ha="center", va="center", fontsize=14, 
+                                                     color="white" if assignment_matrix[i, j] == 1 else "gray")
+                                
+                                # Set labels
+                                cluster_themes = [analysis[i]['theme'] for i in range(n_clusters_found)]
+                                ax_assign.set_xticks(range(n_clusters_found))
+                                ax_assign.set_xticklabels([f"Cluster {i+1}\n{theme[:20]}..." if len(theme) > 20 else f"Cluster {i+1}\n{theme}" 
+                                                          for i, theme in enumerate(cluster_themes)], rotation=45, ha='right')
+                                
+                                chunk_labels = [f"Chunk {i+1}" for i in range(len(chunks))]
+                                ax_assign.set_yticks(range(len(chunks)))
+                                ax_assign.set_yticklabels(chunk_labels)
+                                
+                                ax_assign.set_title('Chunk-to-Cluster Assignment Matrix', pad=20)
+                                ax_assign.set_xlabel('Thematic Clusters')
+                                ax_assign.set_ylabel('System Prompt Chunks')
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig_assign)
+                            
+                            # Tab 3: Similarity Matrix with Cluster Boundaries
+                            with cluster_tabs[2]:
+                                st.write("**Similarity matrix reorganized by clusters to show thematic groupings:**")
+                                
+                                # Reorder similarity matrix by clusters
+                                cluster_order = []
+                                for cluster_id in range(n_clusters_found):
+                                    cluster_indices = clustering_results['clusters'][cluster_id]
+                                    cluster_order.extend(cluster_indices)
+                                
+                                reordered_matrix = similarity_matrix[np.ix_(cluster_order, cluster_order)]
+                                
+                                # Plot reordered similarity matrix with boundaries
+                                fig_bound, ax_bound = plt.subplots(figsize=(10, 8))
+                                
+                                mask = np.triu(np.ones_like(reordered_matrix, dtype=bool))
+                                sns.heatmap(
+                                    reordered_matrix,
+                                    annot=True,
+                                    fmt='.2f',
+                                    cmap='RdYlBu_r',
+                                    center=0.5,
+                                    square=True,
+                                    mask=mask,
+                                    cbar_kws={"shrink": .8},
+                                    ax=ax_bound
+                                )
+                                
+                                # Add cluster boundaries
+                                current_pos = 0
+                                for cluster_id in range(n_clusters_found - 1):  # Don't draw line after last cluster
+                                    cluster_size = len(clustering_results['clusters'][cluster_id])
+                                    current_pos += cluster_size
+                                    # Draw vertical and horizontal lines to separate clusters
+                                    ax_bound.axvline(x=current_pos, color='red', linewidth=2, alpha=0.7)
+                                    ax_bound.axhline(y=current_pos, color='red', linewidth=2, alpha=0.7)
+                                
+                                # Create custom labels showing cluster membership
+                                reordered_labels = []
+                                for cluster_id in range(n_clusters_found):
+                                    cluster_indices = clustering_results['clusters'][cluster_id]
+                                    theme = analysis[cluster_id]['theme']
+                                    for idx in cluster_indices:
+                                        reordered_labels.append(f"C{cluster_id+1}-{idx+1}")  # Cluster1-Chunk1 format
+                                
+                                ax_bound.set_xticklabels(reordered_labels, rotation=45, ha='right')
+                                ax_bound.set_yticklabels(reordered_labels, rotation=0)
+                                ax_bound.set_title('Similarity Matrix Grouped by Clusters\n(Red lines show cluster boundaries)', pad=20)
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig_bound)
+                                
+                                # Show cluster legend
+                                st.write("**Cluster Legend:**")
+                                for cluster_id, cluster_info in analysis.items():
+                                    theme = cluster_info['theme']
+                                    size = cluster_info['size']
+                                    st.write(f"• **C{cluster_id+1}**: {theme} ({size} chunks)")
+                            
+                            # Generate cluster insights
+                            cluster_insights = semantic_analyzer.generate_cluster_insights(chunks, clustering_results)
+                            st.write("**🎯 Clustering Insights & LLM Impact:**")
+                            for insight in cluster_insights:
+                                st.markdown(insight)
+                            
+                            # Add cognitive load analysis
+                            st.markdown("---")
+                            st.subheader("🧠 Cognitive Load Analysis")
+                            st.write("Predicts LLM output degradation risk based on prompt complexity.")
+                            
+                            # Generate cognitive load analysis
+                            from semantic_similarity import CognitiveLoadAnalyzer
+                            cognitive_load_analyzer = CognitiveLoadAnalyzer()
+                            load_result = cognitive_load_analyzer.analyze_cognitive_load(
+                                chunks, clustering_results, similarity_matrix, prediction.token_importance
+                            )
+
+                            # Main load dashboard
+                            load_col1, load_col2, load_col3 = st.columns([2, 1, 1])
+
+                            with load_col1:
+                                # Load meter with color coding
+                                load_color = "🔴" if load_result.overall_load >= 80 else "⚠️" if load_result.overall_load >= 60 else "🟡" if load_result.overall_load >= 40 else "✅"
+                                st.metric("Overall Cognitive Load", f"{load_result.overall_load:.0f}/100", help="Measures prompt complexity and degradation risk")
+                                
+                            with load_col2:
+                                st.metric("Risk Level", f"{load_color} {load_result.risk_level}")
+                                
+                            with load_col3:
+                                # Dominant load factor
+                                max_factor = max(load_result.breakdown.keys(), key=lambda k: load_result.breakdown[k])
+                                st.metric("Primary Issue", max_factor.replace('_', ' ').title())
+
+                            # Detailed load breakdown
+                            st.write("**Load Breakdown:**")
+                            breakdown_cols = st.columns(len(load_result.breakdown))
+
+                            for i, (factor, score) in enumerate(load_result.breakdown.items()):
+                                with breakdown_cols[i]:
+                                    factor_name = factor.replace('_', ' ').title()
+                                    bar_length = int(score / 10)
+                                    progress_bar = "█" * bar_length + "░" * (10 - bar_length)
+                                    st.write(f"**{factor_name}**")
+                                    st.write(f"`{progress_bar}` {score:.0f}")
+
+                            # Risk warnings and conflicts
+                            if load_result.conflicts:
+                                st.write("**🚨 Conflicts Detected:**")
+                                for conflict in load_result.conflicts[:3]:  # Show top 3
+                                    st.error(conflict)
+
+                            # Optimization recommendations
+                            if load_result.recommendations:
+                                st.write("**💡 Optimization Recommendations:**")
+                                for i, rec in enumerate(load_result.recommendations, 1):
+                                    st.info(f"**{i}.** {rec}")
+
+                            # Cognitive load heatmap
+                            if len(clustering_results['clusters']) > 1:
+                                st.write("**🔥 Cognitive Interference Heatmap:**")
+                                
+                                fig_load, ax_load = plt.subplots(figsize=(8, 6))
+                                
+                                sns.heatmap(
+                                    load_result.load_heatmap,
+                                    annot=True,
+                                    fmt='.0f',
+                                    cmap='Reds',
+                                    square=True,
+                                    cbar_kws={"shrink": .8},
+                                    ax=ax_load
+                                )
+                                
+                                cluster_themes = [analysis[i]['theme'][:15] + "..." if len(analysis[i]['theme']) > 15 
+                                                else analysis[i]['theme'] for i in range(len(clustering_results['clusters']))]
+                                
+                                ax_load.set_xticklabels(cluster_themes, rotation=45, ha='right')
+                                ax_load.set_yticklabels(cluster_themes, rotation=0)
+                                ax_load.set_title('Cognitive Interference Between Clusters\n(Higher values = more mental switching cost)', pad=20)
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig_load)
+                                
+                                # Heatmap insights
+                                st.write("**Interference Insights:**")
+                                max_interference = np.max(load_result.load_heatmap[load_result.load_heatmap < 100])  # Exclude diagonal
+                                if max_interference > 70:
+                                    st.warning(f"⚠️ High interference detected ({max_interference:.0f}%) - may cause context switching confusion")
+                                elif max_interference > 40:
+                                    st.info(f"📊 Moderate interference ({max_interference:.0f}%) - manageable complexity")
+                                else:
+                                    st.success(f"✅ Low interference ({max_interference:.0f}%) - smooth cognitive flow")
                         
                         except Exception as e:
                             st.error(f"Error creating embeddings heatmap: {str(e)}")
