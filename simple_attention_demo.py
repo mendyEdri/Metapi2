@@ -7,6 +7,7 @@ import numpy as np
 import seaborn as sns
 from attention_flow import AttentionFlowAnalyzer
 from context_window_modeling import ContextWindowModeler
+from semantic_similarity import SemanticSimilarityAnalyzer
 from sklearn.metrics.pairwise import cosine_similarity
 
 st.set_page_config(
@@ -294,48 +295,152 @@ if st.button("🚀 Analyze Attention Flow", type="primary", use_container_width=
                     plt.tight_layout()
                     st.pyplot(fig)
                     
-                    # Add chunk embeddings heatmap
-                    st.subheader("🔥 Chunk Similarity Heatmap")
+                    # Add chunk embeddings heatmap with semantic analysis
+                    st.subheader("🔥 Chunk Similarity Analysis")
+                    
+                    # Add similarity method selection
+                    similarity_col1, similarity_col2 = st.columns([2, 1])
+                    with similarity_col1:
+                        similarity_method = st.selectbox(
+                            "Similarity Method",
+                            ["Semantic (Meaning-based)", "Syntactic (Structure-based)", "Compare Both"],
+                            index=0,
+                            help="Choose how to measure chunk similarity"
+                        )
+                    
+                    with similarity_col2:
+                        if similarity_method == "Compare Both":
+                            show_comparison = True
+                        else:
+                            show_comparison = st.checkbox("Show method comparison", value=False)
+                    
                     if st.session_state.get('embedder') is not None:
                         try:
-                            # Get embeddings for each chunk
-                            embeddings = []
                             embedder = st.session_state.embedder
+                            semantic_analyzer = SemanticSimilarityAnalyzer()
                             
-                            with st.spinner("Computing chunk embeddings..."):
-                                for chunk in chunks:
-                                    embedding = embedder.embed_query(chunk)
-                                    embeddings.append(embedding)
+                            with st.spinner("Computing semantic similarity..."):
+                                if similarity_method == "Compare Both" or show_comparison:
+                                    # Compute all methods for comparison
+                                    comparison_results = semantic_analyzer.compare_similarity_methods(chunks, embedder)
+                                    
+                                    if similarity_method == "Semantic (Meaning-based)":
+                                        similarity_matrix, processed_chunks = comparison_results['concepts']
+                                        method_used = "concepts"
+                                    elif similarity_method == "Syntactic (Structure-based)":
+                                        similarity_matrix, processed_chunks = comparison_results['syntactic']
+                                        method_used = "syntactic"
+                                    else:  # Compare Both
+                                        similarity_matrix, processed_chunks = comparison_results['concepts']
+                                        method_used = "concepts"
+                                else:
+                                    # Single method computation
+                                    if similarity_method == "Semantic (Meaning-based)":
+                                        similarity_matrix, processed_chunks = semantic_analyzer.compute_semantic_similarity(
+                                            chunks, embedder, method='concepts'
+                                        )
+                                        method_used = "concepts"
+                                    else:  # Syntactic
+                                        embeddings = []
+                                        for chunk in chunks:
+                                            embedding = embedder.embed_query(chunk)
+                                            embeddings.append(embedding)
+                                        similarity_matrix = cosine_similarity(np.array(embeddings))
+                                        processed_chunks = chunks
+                                        method_used = "syntactic"
                             
-                            # Create similarity matrix
-                            embeddings_array = np.array(embeddings)
-                            similarity_matrix = cosine_similarity(embeddings_array)
-                            
-                            # Create heatmap
-                            fig_heatmap, ax_heatmap = plt.subplots(figsize=(8, 6))
-                            
-                            # Use seaborn for better-looking heatmap
-                            mask = np.triu(np.ones_like(similarity_matrix, dtype=bool))
-                            sns.heatmap(
-                                similarity_matrix, 
-                                annot=True, 
-                                fmt='.3f',
-                                cmap='RdYlBu_r',
-                                center=0.5,
-                                square=True,
-                                mask=mask,
-                                cbar_kws={"shrink": .8},
-                                ax=ax_heatmap
-                            )
-                            
-                            # Customize labels
-                            chunk_labels = [f"Chunk {i+1}" for i in range(len(chunks))]
-                            ax_heatmap.set_xticklabels(chunk_labels, rotation=45)
-                            ax_heatmap.set_yticklabels(chunk_labels, rotation=0)
-                            ax_heatmap.set_title('Semantic Similarity Between Chunks\n(Higher values = More similar)', pad=20)
-                            
-                            plt.tight_layout()
-                            st.pyplot(fig_heatmap)
+                            # Create heatmap(s)
+                            if similarity_method == "Compare Both" or show_comparison:
+                                # Show comparison of methods
+                                st.subheader("\ud83d\udd0d Similarity Method Comparison")
+                                
+                                # Create side-by-side heatmaps
+                                fig_comp, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+                                
+                                # Syntactic heatmap
+                                syntactic_matrix = comparison_results['syntactic'][0]
+                                mask = np.triu(np.ones_like(syntactic_matrix, dtype=bool))
+                                
+                                sns.heatmap(
+                                    syntactic_matrix,
+                                    annot=True,
+                                    fmt='.3f',
+                                    cmap='RdYlBu_r',
+                                    center=0.5,
+                                    square=True,
+                                    mask=mask,
+                                    cbar_kws={"shrink": .8},
+                                    ax=ax1
+                                )
+                                ax1.set_title('Syntactic Similarity\\n(Structure-based)', pad=20)
+                                
+                                # Semantic heatmap  
+                                semantic_matrix = comparison_results['concepts'][0]
+                                
+                                sns.heatmap(
+                                    semantic_matrix,
+                                    annot=True,
+                                    fmt='.3f',
+                                    cmap='RdYlBu_r',
+                                    center=0.5,
+                                    square=True,
+                                    mask=mask,
+                                    cbar_kws={"shrink": .8},
+                                    ax=ax2
+                                )
+                                ax2.set_title('Semantic Similarity\\n(Meaning-based)', pad=20)
+                                
+                                # Set labels for both
+                                chunk_labels = [f"Chunk {i+1}" for i in range(len(chunks))]
+                                for ax in [ax1, ax2]:
+                                    ax.set_xticklabels(chunk_labels, rotation=45)
+                                    ax.set_yticklabels(chunk_labels, rotation=0)
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig_comp)
+                                
+                                # Analysis of differences
+                                analysis = semantic_analyzer.analyze_similarity_differences(
+                                    chunks, syntactic_matrix, semantic_matrix
+                                )
+                                insights = semantic_analyzer.generate_similarity_insights(chunks, analysis)
+                                
+                                st.write("**\ud83d\udd0d Method Comparison Insights:**")
+                                for insight in insights:
+                                    st.markdown(insight)
+                                    
+                                # Use semantic for main analysis
+                                similarity_matrix = semantic_matrix
+                                
+                            else:
+                                # Single heatmap
+                                fig_heatmap, ax_heatmap = plt.subplots(figsize=(8, 6))
+                                
+                                mask = np.triu(np.ones_like(similarity_matrix, dtype=bool))
+                                sns.heatmap(
+                                    similarity_matrix, 
+                                    annot=True, 
+                                    fmt='.3f',
+                                    cmap='RdYlBu_r',
+                                    center=0.5,
+                                    square=True,
+                                    mask=mask,
+                                    cbar_kws={"shrink": .8},
+                                    ax=ax_heatmap
+                                )
+                                
+                                # Customize labels and title
+                                chunk_labels = [f"Chunk {i+1}" for i in range(len(chunks))]
+                                ax_heatmap.set_xticklabels(chunk_labels, rotation=45)
+                                ax_heatmap.set_yticklabels(chunk_labels, rotation=0)
+                                
+                                if method_used == "concepts":
+                                    ax_heatmap.set_title('Semantic Similarity Between Chunks\\n(Meaning-based analysis)', pad=20)
+                                else:
+                                    ax_heatmap.set_title('Syntactic Similarity Between Chunks\\n(Structure-based analysis)', pad=20)
+                                
+                                plt.tight_layout()
+                                st.pyplot(fig_heatmap)
                             
                             # Analysis insights
                             st.write("**Heatmap Insights:**")
@@ -350,7 +455,11 @@ if st.button("🚀 Analyze Attention Flow", type="primary", use_container_width=
                                         max_sim = similarity_matrix[i, j]
                                         most_similar_pair = (i, j)
                             
-                            st.write(f"• **Most similar chunks:** Chunk {most_similar_pair[0]+1} & Chunk {most_similar_pair[1]+1} (similarity: {max_sim:.3f})")
+                            # Show what method detected
+                            method_emoji = "\ud83e\udde0" if method_used == "concepts" else "\ud83d\udd27"
+                            method_name = "Semantic" if method_used == "concepts" else "Syntactic"
+                            
+                            st.write(f"• **Most similar chunks ({method_name}):** Chunk {most_similar_pair[0]+1} & Chunk {most_similar_pair[1]+1} (similarity: {max_sim:.3f})")
                             
                             # Find most different chunks
                             min_sim = 1.0
